@@ -1,0 +1,83 @@
+version: '3' 
+volumes: 
+  postgres_data: 
+      driver: local 
+  elasticsearch-data:
+      driver: local
+services: 
+  postgres: 
+      image: postgres 
+      volumes: 
+        - postgres_data:/var/lib/postgresql/data 
+      environment: 
+        POSTGRES_DB: keycloak 
+        POSTGRES_USER: keycloak 
+        POSTGRES_PASSWORD: hTzqrbMzAU 
+      ports: 
+        - 5342:5342 
+  keycloak: 
+      image: quay.io/keycloak/keycloak:latest 
+      environment: 
+        DB_VENDOR: POSTGRES 
+        DB_ADDR: postgres 
+        DB_DATABASE: keycloak 
+        DB_USER: keycloak 
+        DB_SCHEMA: public 
+        DB_PASSWORD: hTzqrbMzAU 
+        KEYCLOAK_USER: admin 
+        KEYCLOAK_PASSWORD: hTzqrbMzAU 
+      ports: 
+        - 8080:8080 
+      depends_on: 
+        - postgres 
+  consul: 
+    image: consul:latest 
+    ports: 
+      - '8300:8300' 
+      - '8301:8301' 
+      - '8301:8301/udp' 
+      - '8500:8500' 
+      - '8600:8600' 
+      - '8600:8600/udp'
+
+  api-gateway:
+    image: tripzalk/tripza-api-gateway:latest
+    ports:
+      - 8089:8089
+    depends_on: 
+      - consul    
+  config-server:
+    image: tripzalk/tripza-config-server:latest    
+    depends_on: 
+      - consul
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.4.0
+    container_name: elasticsearch
+    environment:
+      - xpack.security.enabled=false
+      - discovery.type=single-node
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+      - 9300:9300
+
+  kibana:
+    container_name: kibana
+    image: docker.elastic.co/kibana/kibana:7.4.0
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - 5601:5601
+    depends_on:
+      - elasticsearch
