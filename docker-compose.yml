@@ -1,37 +1,10 @@
-version: '3' 
-volumes: 
-  postgres_data: 
-      driver: local 
-  elasticsearch-data:
-      driver: local
+version: '3.5' 
 services: 
-  postgres: 
-      image: postgres 
-      volumes: 
-        - postgres_data:/var/lib/postgresql/data 
-      environment: 
-        POSTGRES_DB: keycloak 
-        POSTGRES_USER: keycloak 
-        POSTGRES_PASSWORD: hTzqrbMzAU 
-      ports: 
-        - 5342:5342 
-  keycloak: 
-      image: quay.io/keycloak/keycloak:latest 
-      environment: 
-        DB_VENDOR: POSTGRES 
-        DB_ADDR: postgres 
-        DB_DATABASE: keycloak 
-        DB_USER: keycloak 
-        DB_SCHEMA: public 
-        DB_PASSWORD: hTzqrbMzAU 
-        KEYCLOAK_USER: admin 
-        KEYCLOAK_PASSWORD: hTzqrbMzAU 
-      ports: 
-        - 8080:8080 
-      depends_on: 
-        - postgres 
   consul: 
-    image: consul:latest 
+    image: consul:latest
+    container_name: consul
+    networks:
+      - dockr    
     ports: 
       - '8300:8300' 
       - '8301:8301' 
@@ -40,44 +13,80 @@ services:
       - '8600:8600' 
       - '8600:8600/udp'
 
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: zipkin    
+    networks:
+      - dockr
+    ports:
+      - '9411:9411'
+      
   api-gateway:
     image: tripzalk/tripza-api-gateway:latest
+    container_name: api-gateway      
     ports:
-      - 8089:8089
+      - '8089:8089'
+    networks:
+      - dockr
     depends_on: 
       - consul    
+      
   config-server:
-    image: tripzalk/tripza-config-server:latest    
+    image: tripzalk/tripza-config-server:latest
+    container_name: config-server      
+    networks:
+      - dockr    
     depends_on: 
       - consul
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.4.0
-    container_name: elasticsearch
-    environment:
-      - xpack.security.enabled=false
-      - discovery.type=single-node
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
-    cap_add:
-      - IPC_LOCK
+    image: elasticsearch:$ELK_VERSION
     volumes:
-      - elasticsearch-data:/usr/share/elasticsearch/data
-    ports:
-      - 9200:9200
-      - 9300:9300
-
-  kibana:
-    container_name: kibana
-    image: docker.elastic.co/kibana/kibana:7.4.0
+      - elasticsearch:/usr/share/elasticsearch/data
+    container_name: elasticsearch        
     environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+      discovery.type: single-node
     ports:
-      - 5601:5601
+      - '9200:9200'
+      - '9300:9300'
+    networks:
+      - dockr
+    restart: unless-stopped
+
+  logstash:
+    image: logstash:$ELK_VERSION
+    container_name: logstash     
+    ports:
+      - '5000:5000'
+      - '9600:9600'
+    environment:
+      LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+      XPACK_MONITORING_ELASTICSEARCH_HOSTS: "elasticsearch:9200"
+      XPACK_MONITORING_ENABLED: "true"
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+    networks:
+      - dockr
+    restart: unless-stopped
     depends_on:
       - elasticsearch
+
+  kibana:
+    image: kibana:${ELK_VERSION}
+    container_name: kibana    
+    environment:
+      XPACK_MONITORING_UI_CONTAINER_ELASTICSEARCH_ENABLED: "true"
+    ports:
+      - '5601:5601'
+    networks:
+      - dockr
+    restart: unless-stopped
+    depends_on:
+      - elasticsearch
+      - logstash
+
+networks:
+  dockr:
+volumes:
+  elasticsearch:
