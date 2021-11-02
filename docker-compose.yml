@@ -26,6 +26,10 @@ services:
     container_name: api-gateway      
     ports:
       - '8089:8089'
+    environment:  
+      - SPR_PROFILE=local
+      - CONSUL_URL=192.168.1.149
+      - LOGSTASH_URL=192.168.1.149
     networks:
       - dockr
     depends_on: 
@@ -38,6 +42,10 @@ services:
       - dockr    
     depends_on: 
       - consul
+    environment:  
+      - SPR_PROFILE=local
+      - CONSUL_URL=192.168.1.149
+      - LOGSTASH_URL=192.168.1.149
 
   elasticsearch:
     image: elasticsearch:$ELK_VERSION
